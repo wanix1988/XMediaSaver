@@ -1,124 +1,139 @@
 # XMediaSaver
 
-X / Twitter 媒体下载器 —— 贴入分享链接，视频/图片存入相册，长文章自动排版保存为 PDF。
+English | **[简体中文](README.zh-CN.md)**
 
-免登录、无广告、无第三方 SDK，仅申请网络权限。
+An X / Twitter media saver for Android — paste a share link, and videos/photos land in your gallery while long-form articles are typeset into a PDF.
 
-## 功能
+No login, no ads, no third-party SDKs. Requests only the INTERNET permission.
 
-- **推文媒体下载**：视频（含 GIF）、多图，直接写入系统相册
-  - 视频 → `Movies/XMediaSaver/`
-  - 图片 → `Pictures/XMediaSaver/`
-- **X 文章（Articles）转 PDF**：解析 Draft.js 结构，保留标题层级、粗斜体、链接、
-  引用块、有序/无序列表、代码块、文内图片与内嵌推文，A4 自动分页，存入
+## Features
+
+- **Tweet media downloads** — videos (incl. GIFs) and multi-image posts, written
+  straight into the system gallery
+  - Videos → `Movies/XMediaSaver/`
+  - Photos → `Pictures/XMediaSaver/`
+- **Tweet txt archive** — every tweet (including text-only ones) is exported to a
+  txt file recording the author, posting time, tweet URL, media manifest, and full
+  text, saved to `Documents/XMediaSaver/`
+- **X Articles → PDF** — parses the Draft.js structure and preserves heading
+  levels, bold/italic, links, block quotes, ordered/unordered lists, code blocks,
+  inline images, and embedded tweets, with automatic A4 pagination into
   `Documents/XMediaSaver/`
-- **文件名以内容标题开头**：`{标题}_{作者}_{推文ID}_{序号}.{扩展名}`，标题取推文
-  首行/文章标题（去 URL 与非法字符，限 50 字符）
-- **下载历史**：最近 50 条本地记录，点击直接打开对应文件
-- **分享直达**：从 X App 分享链接到本应用直接开始下载
-- 同名文件自动去重，重复下载直接复用本地文件
+- **Content-titled filenames** — `{title}_{author}_{tweetId}_{n}.{ext}`; the title
+  comes from the tweet's first line or the article title (URLs and illegal
+  characters stripped, capped at 50 chars)
+- **Download history** — last 50 entries kept locally; tap any entry to open the
+  saved file
+- **Share-to-download** — share a link from the X app straight into XMediaSaver
+- Duplicate detection — re-downloading an existing file reuses the local copy
 
-## 技术方案
+## How It Works
 
-### 免登录解析（三源容错）
+### Login-free resolution (three-source fallback)
 
-不调用官方 API、不模拟登录，依次尝试三个匿名可访问的数据源：
+No official API calls and no login simulation. The resolver tries three
+anonymously accessible data sources in order:
 
 1. **fxtwitter v2** — `https://api.fxtwitter.com/2/status/{id}`
-   （文章结构 `article.content.blocks` 由此返回）
+   (article structure `article.content.blocks` comes from here)
 2. **fxtwitter v1** — `https://api.fxtwitter.com/_/status/{id}`
-3. **官方 syndication** — `https://cdn.syndication.twimg.com/tweet-result?id={id}&token=...`
-   （token 校验宽松，任意 32 位 hex 可用）
+3. **Official syndication** —
+   `https://cdn.syndication.twimg.com/tweet-result?id={id}&token=...`
+   (token validation is lax — any 32-hex string works)
 
-视频直链来自 `video.twimg.com`、图片来自 `pbs.twimg.com`，均匿名可下载，
-请求时带浏览器 UA 与 `Referer: https://x.com/`。
+Video direct links come from `video.twimg.com`, photos from `pbs.twimg.com`;
+both download anonymously with a browser UA and `Referer: https://x.com/`.
 
-### 技术栈
+### Tech stack
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
-| 语言 | Kotlin |
-| 包名 | `com.wenix.xmediasaver`（个人工程统一以 `com.wenix` 为前缀） |
-| UI | Jetpack Compose + Material 3（单 Activity） |
-| 网络 | OkHttp 4 |
-| 存储 | MediaStore（API 29+ 免权限）；API 26-28 兜底 app 私有目录 + MediaScanner |
-| PDF | 原生 `PdfDocument` + `StaticLayout` 自动分页，无第三方渲染库 |
-| 构建 | AGP 8.13.2 / Kotlin 2.0.21 / Gradle 8.13，JDK 17+ |
-| SDK | compileSdk 36 / targetSdk 36 / minSdk 26（Android 8.0+） |
+| Language | Kotlin |
+| Package | `com.wenix.xmediasaver` (personal projects use the `com.wenix` prefix) |
+| UI | Jetpack Compose + Material 3 (single Activity) |
+| Networking | OkHttp 4 |
+| Storage | MediaStore (API 29+, permission-free); API 26-28 falls back to app-private dirs + MediaScanner |
+| PDF | Native `PdfDocument` + `StaticLayout` pagination — no third-party renderers |
+| Build | AGP 8.13.2 / Kotlin 2.0.21 / Gradle 8.13, JDK 17+ |
+| SDK | compileSdk 36 / targetSdk 36 / minSdk 26 (Android 8.0+) |
 
-### 模块结构
+### Module layout
 
 ```
 app/src/main/java/com/wenix/xmediasaver/
-├── MainActivity.kt          # Compose UI + 历史列表 + 文件打开
-├── MainViewModel.kt         # UiState 状态机：解析 → 下载/渲染 → 完成
+├── MainActivity.kt          # Compose UI + history list + file opening
+├── MainViewModel.kt         # UiState machine: resolve → download/render → done
 ├── resolver/
-│   ├── TweetResolver.kt     # 三源容错解析器（推文 + 文章）
-│   ├── ArticleParser.kt     # Draft.js blocks → ArticleElement 流
-│   ├── LinkExtractor.kt     # 分享文本中提取 URL / 推文 ID
-│   └── Models.kt            # TweetData / ArticleData / ArticleEmbed 等模型
+│   ├── TweetResolver.kt     # Three-source fallback resolver (tweets + articles)
+│   ├── ArticleParser.kt     # Draft.js blocks → ArticleElement stream
+│   ├── LinkExtractor.kt     # URL / tweet ID extraction from shared text
+│   └── Models.kt            # TweetData / ArticleData / ArticleEmbed models
 ├── download/
-│   ├── MediaDownloader.kt   # MediaStore 落盘 + 进度回调 + 去重
-│   └── ArticlePdfRenderer.kt# 文章 → PDF 排版渲染（A4 分页引擎）
+│   ├── MediaDownloader.kt   # MediaStore persistence + progress + dedup + txt archive
+│   └── ArticlePdfRenderer.kt# Article → PDF typesetting engine (A4 pagination)
 └── history/
-    └── HistoryStore.kt      # 下载历史 JSON 持久化（最多 50 条）
+    └── HistoryStore.kt      # Download history as JSON (up to 50 entries)
 ```
 
-## 构建
+## Building
 
 ```bash
-# 环境要求：JDK 17+，ANDROID_HOME 指向 Android SDK
+# Requirements: JDK 17+, ANDROID_HOME pointing at an Android SDK
 export ANDROID_HOME=$HOME/Library/Android/sdk
 
-# Debug 版
+# Debug build
 ./gradlew assembleDebug
 
-# Release 版（需先生成签名密钥，见下节）
+# Release build (signing key must be configured first — see below)
 ./gradlew assembleRelease
 ```
 
-产物路径：`app/build/outputs/apk/{debug,release}/`
+Output path: `app/build/outputs/apk/{debug,release}/`
 
-## Release 签名
+## Release signing
 
-密钥与密码**均不入库**（已加入 `.gitignore`）。构建脚本中无明文密码，签名信息
-从两个来源读取（优先级从高到低）：
+Keystore and passwords are **never committed** (covered by `.gitignore`), and the
+build script contains no plaintext secrets. Signing info is read from two sources
+(highest priority first):
 
-1. 本机 `keystore.properties`（已 gitignore，格式见下）
-2. 环境变量 `XMS_STORE_FILE` / `XMS_STORE_PASSWORD` / `XMS_KEY_ALIAS` /
-   `XMS_KEY_PASSWORD`
+1. A local `keystore.properties` file (gitignored; format below)
+2. Environment variables `XMS_STORE_FILE` / `XMS_STORE_PASSWORD` /
+   `XMS_KEY_ALIAS` / `XMS_KEY_PASSWORD`
 
-`keystore.properties` 格式：
+`keystore.properties` format:
 
 ```properties
 storeFile=keystore/xmediasaver.jks
-storePassword=<密码>
+storePassword=<password>
 keyAlias=xmediasaver
-keyPassword=<密码>
+keyPassword=<password>
 ```
 
-两者皆缺时 release 产物不签名（构建会输出告警），可另行手动签名。
-密钥本机位于 `keystore/xmediasaver.jks`，需自行备份。
+If neither source is present, the release artifact is left unsigned (the build
+prints a warning); sign it manually afterwards. The keystore lives at
+`keystore/xmediasaver.jks` on the dev machine — back it up yourself.
 
-在新机器恢复构建时重新生成密钥：
+Regenerate a key on a new machine:
 
 ```bash
 keytool -genkeypair -v -keystore keystore/xmediasaver.jks \
   -alias xmediasaver -keyalg RSA -keysize 2048 -validity 9125
 ```
 
-注意：更换密钥后无法覆盖安装旧版本，需先卸载。
+Note: a different key cannot upgrade-install over an existing installation —
+uninstall first.
 
-## 安装到手机
+## Installing on a phone
 
 ```bash
-adb install -r XMediaSaver-v1.2.0-release.apk
+adb install -r XMediaSaver-v1.3.0-release.apk
 ```
 
-## 版本历史
+## Version history
 
-| 版本 | 说明 |
+| Version | Notes |
 |---|---|
-| 1.2.0 | 文件名以推文/文章标题开头 |
-| 1.1.0 | R8 压缩 release；历史点击打开文件；标题栏遮挡修复；文章 PDF 排版重写 |
-| 1.0.0 | 首版：推文媒体下载 + 文章 PDF + 下载历史 |
+| 1.3.0 | Text-only tweet support; txt archive for every tweet; fix for short legacy tweet IDs |
+| 1.2.0 | Filenames now start with the tweet/article title |
+| 1.1.0 | R8-shrunk release; open files from history; top-bar overlap fix; article PDF layout rewrite |
+| 1.0.0 | Initial release: tweet media download + article PDF + download history |
