@@ -1,0 +1,26 @@
+# 构建产物
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# 签名密钥不入库（仅本机保管）
+keystore/
+*.jks
+*.keystore
+keystore.properties
+
+# 历史文件（手机端生成）
+*.local.json
