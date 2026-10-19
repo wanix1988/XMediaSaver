@@ -93,16 +93,18 @@ class TweetResolver(private val client: OkHttpClient) {
                 )
             }
         }
-        if (media.isEmpty()) error("这条推文没有图片/视频")
-        Log.d(TAG, "fx resolved id=$id media=${media.size}")
+        if (media.isEmpty()) Log.d(TAG, "fx resolved id=$id media=0（纯文本推文）")
+        else Log.d(TAG, "fx resolved id=$id media=${media.size}")
+        val handle = author?.optString("screen_name")?.ifBlank { null } ?: "user"
         return TweetData(
             id = status.optString("id", id),
             authorName = author?.optString("name")?.ifBlank { null } ?: "unknown",
-            authorHandle = author?.optString("screen_name")?.ifBlank { null } ?: "user",
+            authorHandle = handle,
             avatarUrl = author?.optString("avatar_url")?.ifBlank { null },
             text = status.optString("text"),
             createdAt = status.optString("created_at").ifBlank { null },
             media = media,
+            url = status.optString("url").ifBlank { "https://x.com/$handle/status/$id" },
         )
     }
 
@@ -131,11 +133,11 @@ class TweetResolver(private val client: OkHttpClient) {
         val json = getJson("https://cdn.syndication.twimg.com/tweet-result?id=$id&token=$SYNDICATION_TOKEN&lang=zh")
             ?: error("syndication 无响应")
         val user = json.optJSONObject("user") ?: error("syndication 数据不完整")
-        val details = json.optJSONArray("mediaDetails") ?: error("这条推文没有图片/视频")
+        val details = json.optJSONArray("mediaDetails")
 
         val media = mutableListOf<MediaItem>()
-        for (i in 0 until details.length()) {
-            val d = details.optJSONObject(i) ?: continue
+        for (i in 0 until (details?.length() ?: 0)) {
+            val d = details?.optJSONObject(i) ?: continue
             val size = d.optJSONObject("original_info")
             val width = size?.optInt("width", 0)?.takeIf { it > 0 }
             val height = size?.optInt("height", 0)?.takeIf { it > 0 }
@@ -165,16 +167,18 @@ class TweetResolver(private val client: OkHttpClient) {
                 }
             }
         }
-        if (media.isEmpty()) error("这条推文没有图片/视频")
-        Log.d(TAG, "synd resolved id=$id mediaDetails=${details.length()}")
+        if (media.isEmpty()) Log.d(TAG, "synd resolved id=$id media=0（纯文本推文）")
+        else Log.d(TAG, "synd resolved id=$id mediaDetails=${details!!.length()}")
+        val handle = user.optString("screen_name").ifBlank { "user" }
         return TweetData(
             id = json.optString("id_str", id),
             authorName = user.optString("name").ifBlank { "unknown" },
-            authorHandle = user.optString("screen_name").ifBlank { "user" },
+            authorHandle = handle,
             avatarUrl = user.optString("profile_image_url_https").ifBlank { null },
             text = json.optString("text"),
             createdAt = json.optString("created_at").ifBlank { null },
             media = media,
+            url = "https://x.com/$handle/status/${json.optString("id_str", id)}",
         )
     }
 

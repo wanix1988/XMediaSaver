@@ -70,6 +70,10 @@ class MediaDownloader(
         saved.toList()
     }
 
+    /** 纯文本推文（无媒体）也能走存档流程 */
+    suspend fun downloadMediaOrEmpty(tweet: TweetData, onProgress: (Progress) -> Unit): List<SavedFile> =
+        if (tweet.media.isEmpty()) emptyList() else downloadAll(tweet, onProgress)
+
     private suspend fun downloadItem(
         tweet: TweetData,
         index: Int,
@@ -328,6 +332,79 @@ class MediaDownloader(
         val handle = article.authorHandle.filter { it.isLetterOrDigit() || it == '_' }.take(24).ifEmpty { "user" }
         val title = sanitizeFileName(article.title).take(MAX_TITLE_LEN).ifEmpty { "X_Article" }
         return "${title}_${handle}_${article.id}.pdf"
+    }
+
+    // ---------------- 推文文本存档 ----------------
+
+    /**
+     * 推文导出为 txt：Documents/XMediaSaver/ 下。
+     * 所有推文（含带媒体的）都会存档：作者、发布时间、正文、推文链接、媒体清单。
+     */
+    suspend fun saveTweetText(tweet: TweetData, mediaFiles: List<SavedFile>): SavedFile =
+        withContext(Dispatchers.IO) {
+            val displayName = buildTxtName(tweet)
+            val content = buildTweetTxt(tweet, mediaFiles)
+
+            findExistingPdf(displayName)?.let { existing ->
+                // 同名已存在：内容一致（按 id 命名），直接复用
+                return@withContext existing.copy(mimeType = "text/plain")
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_DOC_PATH)
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val resolver = context.contentResolver
+                val uri = resolver.insert(collection, values) ?: error("无法创建 txt 文件")
+                try {
+                    resolver.openOutputStream(uri, "w")?.use { out ->
+                        out.write(content.toByteArray(Charsets.UTF_8))
+                    } ?: error("无法打开输出流")
+                    values.clear()
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    SavedFile(displayName, uri.toString(), "text/plain", MediaKind.PHOTO, querySize(uri), false)
+                } catch (e: Exception) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw e
+                }
+            } else {
+                val parent = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "XMediaSaver")
+                parent.mkdirs()
+                val target = File(parent, displayName)
+                target.writeText(content, Charsets.UTF_8)
+                SavedFile(
+                    displayName, Uri.fromFile(target).toString(), "text/plain", MediaKind.PHOTO,
+                    target.length(), false,
+                )
+            }
+        }
+
+    private fun buildTxtName(tweet: TweetData): String {
+        val handle = tweet.authorHandle.filter { it.isLetterOrDigit() || it == '_' }.take(24).ifEmpty { "user" }
+        val title = titleFromText(tweet.text).ifEmpty { "X_Tweet" }
+        return "${title}_${handle}_${tweet.id}.txt"
+    }
+
+    /** 生成存档正文：作者 / 发布时间 / 正文 / 链接 / 媒体清单 */
+    private fun buildTweetTxt(tweet: TweetData, mediaFiles: List<SavedFile>): String = buildString {
+        appendLine("作者: ${tweet.authorName} (@${tweet.authorHandle})")
+        appendLine("发布时间: ${tweet.createdAt ?: "未知"}")
+        appendLine("推文链接: ${tweet.url ?: "https://x.com/${tweet.authorHandle}/status/${tweet.id}"}")
+        if (mediaFiles.isNotEmpty()) {
+            appendLine("媒体文件: ${mediaFiles.size} 个")
+            mediaFiles.forEach { appendLine("  - ${it.displayName}（${it.kind}，${it.sizeBytes} 字节）") }
+        } else {
+            appendLine("媒体文件: 无")
+        }
+        appendLine()
+        appendLine("--- 正文 ---")
+        appendLine(tweet.text)
+        appendLine("--- 保存于 ${System.currentTimeMillis()} ---")
     }
 
     private fun findExistingPdf(displayName: String): SavedFile? {

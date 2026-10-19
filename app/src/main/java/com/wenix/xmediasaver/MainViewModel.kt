@@ -79,13 +79,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
                 is TweetResolver.Result.Tweet -> {
                     val tweet = resolved.data
-                    _state.value = UiState.Downloading(
-                        tweet,
-                        MediaDownloader.Progress(0, tweet.media.size, 0, null),
-                    )
-                    val files = downloader.downloadAll(tweet) { p ->
+                    if (tweet.media.isNotEmpty()) {
+                        _state.value = UiState.Downloading(
+                            tweet,
+                            MediaDownloader.Progress(0, tweet.media.size, 0, null),
+                        )
+                    }
+                    val mediaFiles = downloader.downloadMediaOrEmpty(tweet) { p ->
                         _state.value = UiState.Downloading(tweet, p)
                     }
+                    // 所有推文（含纯文本）都导出 txt 存档
+                    val txtFile = downloader.saveTweetText(tweet, mediaFiles)
+                    val files = mediaFiles + txtFile
                     history.add(
                         System.currentTimeMillis(),
                         tweet.authorHandle,

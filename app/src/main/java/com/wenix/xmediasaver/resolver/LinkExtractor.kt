@@ -8,7 +8,8 @@ object LinkExtractor {
     private val URL_TOKEN = Regex("""https?://[^\s<>"'，。；）】]+""", RegexOption.IGNORE_CASE)
 
     // /<user>/status/<id>，兼容 /i/web/status/<id> 与 /statuses/<id>
-    private val STATUS_ID = Regex("""/(?:i/web/)?status(?:es)?/(\d{5,25})""")
+    // 早期推文 ID 很短（如 jack 首推 id=20），下限放到 1 位
+    private val STATUS_ID = Regex("""/(?:i/web/)?status(?:es)?/(\d{1,25})""")
 
     private val HOSTS = setOf(
         "x.com", "www.x.com",

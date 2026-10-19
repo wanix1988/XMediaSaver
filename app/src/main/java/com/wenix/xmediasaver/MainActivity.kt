@@ -204,7 +204,7 @@ private fun HomeScreen(
         Text("粘贴 X / Twitter 分享链接", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(
-            "视频/图片存入相册，X 文章自动排版保存为 PDF",
+            "视频/图片存入相册，X 文章保存为 PDF，每条推文附 txt 存档",
             fontSize = 13.sp, color = SubTextColor,
         )
         Spacer(Modifier.height(20.dp))
@@ -344,9 +344,12 @@ private fun DoneScreen(s: MainViewModel.UiState.Done, viewModel: MainViewModel, 
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("已保存 ${s.files.size} 个文件", fontSize = 20.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                val mediaCount = s.files.count { it.mimeType != "text/plain" }
+                val title = if (mediaCount == 0) "推文已存为文本存档" else "已保存 ${s.files.size} 个文件"
+                Text(title, fontSize = 20.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 Text(
-                    "@${s.tweet.authorHandle} · 已存入系统相册（Movies/XMediaSaver）",
+                    "@${s.tweet.authorHandle} · 存档在 Documents/XMediaSaver" +
+                        (if (mediaCount > 0) "，媒体在系统相册" else ""),
                     fontSize = 13.sp, color = SubTextColor,
                 )
             }
@@ -370,7 +373,12 @@ private fun DoneScreen(s: MainViewModel.UiState.Done, viewModel: MainViewModel, 
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (file.kind == MediaKind.PHOTO) "🖼 图片" else "🎬 视频", fontSize = 14.sp)
+                        val label = when {
+                            file.mimeType == "text/plain" -> "📄 文本存档"
+                            file.kind == MediaKind.PHOTO -> "🖼 图片"
+                            else -> "🎬 视频"
+                        }
+                        Text(label, fontSize = 14.sp)
                         Spacer(Modifier.weight(1f))
                         Text(formatBytes(file.sizeBytes), fontSize = 12.sp, color = SubTextColor)
                     }

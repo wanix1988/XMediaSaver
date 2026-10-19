@@ -20,6 +20,8 @@ data class TweetData(
     val text: String,
     val createdAt: String? = null,
     val media: List<MediaItem>,
+    /** 推文永久链接（存档用），形如 https://x.com/{handle}/status/{id} */
+    val url: String? = null,
 )
 
 // ---------------- X 文章（Articles） ----------------
