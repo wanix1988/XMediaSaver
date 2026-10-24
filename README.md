@@ -123,6 +123,30 @@ keytool -genkeypair -v -keystore keystore/xmediasaver.jks \
 Note: a different key cannot upgrade-install over an existing installation —
 uninstall first.
 
+## GitHub Releases
+
+A push to `main` publishes a release when that `versionName` does not already
+have one. The workflow builds a signed APK and attaches it as
+`XMediaSaver-<version>-release.apk` on tag `v<version>`.
+
+Before the first run, add these Actions secrets
+(Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Base64 of `keystore/xmediasaver.jks` |
+| `XMS_STORE_PASSWORD` | Keystore password |
+| `XMS_KEY_ALIAS` | Key alias |
+| `XMS_KEY_PASSWORD` | Key password |
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("keystore\xmediasaver.jks"))
+```
+
+Bump `versionCode` and `versionName`, then push to `main`, to publish the next
+release. If a run failed before the secrets existed, add them and re-run that
+workflow from the Actions tab.
+
 ## Installing on a phone
 
 ```bash

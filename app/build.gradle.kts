@@ -18,24 +18,43 @@ android {
         versionName = "1.3.0"
     }
 
-    signingConfigs {
-        // 签名信息从 keystore.properties（已 gitignore，仅本机）读取，
-        // 未提供时回退环境变量；两者皆缺则跳过 release 签名（仅构建未签名产物）。
-        val keystoreProps = rootProject.file("keystore.properties")
-        val props = Properties()
-        if (keystoreProps.exists()) {
-            keystoreProps.inputStream().use { props.load(it) }
+    // 签名信息从 keystore.properties（已 gitignore，仅本机）读取，
+    // 未提供时回退环境变量；两者皆缺则跳过 release 签名（仅构建未签名产物）。
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties()
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { keystoreProps.load(it) }
+    }
+    fun signingValue(property: String, vararg envNames: String): String? {
+        val fromFile = keystoreProps.getProperty(property)?.takeIf { it.isNotBlank() }
+        if (fromFile != null) return fromFile
+        return envNames.firstNotNullOfOrNull { name ->
+            System.getenv(name)?.takeIf { it.isNotBlank() }
         }
-        fun signingKey(name: String): String? =
-            props.getProperty(name) ?: System.getenv("XMS_${name.uppercase()}")
-        create("release") {
-            storeFile = rootProject.file(props.getProperty("storeFile") ?: "keystore/xmediasaver.jks")
-            storePassword = signingKey("storePassword")
-            keyAlias = signingKey("keyAlias")
-            keyPassword = signingKey("keyPassword")
-            // 全部齐备才启用签名；否则构建未签名 release（由 CI/本机另行签名）
-            if (storePassword == null || keyAlias == null || keyPassword == null) {
-                logger.warn("XMediaSaver: 缺少签名配置（keystore.properties 或 XMS_* 环境变量），release 将不签名")
+    }
+    val releaseStorePath = signingValue("storeFile", "XMS_STORE_FILE") ?: "keystore/xmediasaver.jks"
+    val releaseStorePassword = signingValue("storePassword", "XMS_STORE_PASSWORD", "XMS_STOREPASSWORD")
+    val releaseKeyAlias = signingValue("keyAlias", "XMS_KEY_ALIAS", "XMS_KEYALIAS")
+    val releaseKeyPassword = signingValue("keyPassword", "XMS_KEY_PASSWORD", "XMS_KEYPASSWORD")
+    val releaseStoreFile = rootProject.file(releaseStorePath)
+    val releaseSigningReady = releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null &&
+        releaseStoreFile.isFile
+    if (!releaseSigningReady) {
+        logger.warn("XMediaSaver: 缺少签名配置（keystore.properties 或 XMS_* 环境变量），release 将不签名")
+    }
+    if (System.getenv("XMS_REQUIRE_SIGNING") == "true" && !releaseSigningReady) {
+        error("Release 签名未配置。请提供 keystore，并设置 XMS_STORE_PASSWORD、XMS_KEY_ALIAS、XMS_KEY_PASSWORD。")
+    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
             }
         }
     }
@@ -48,7 +67,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

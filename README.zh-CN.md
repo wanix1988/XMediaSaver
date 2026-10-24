@@ -113,6 +113,27 @@ keytool -genkeypair -v -keystore keystore/xmediasaver.jks \
 
 注意：更换密钥后无法覆盖安装旧版本，需先卸载。
 
+## GitHub Release
+
+推送到 `main` 时，若当前 `versionName` 还没有对应的 Release，工作流会构建已签名
+APK，并以标签 `v<版本号>` 发布，附件名为 `XMediaSaver-<版本号>-release.apk`。
+
+首次运行前，在仓库 Settings → Secrets and variables → Actions 添加：
+
+| Secret | 内容 |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `keystore/xmediasaver.jks` 的 Base64 |
+| `XMS_STORE_PASSWORD` | 密钥库密码 |
+| `XMS_KEY_ALIAS` | 密钥别名 |
+| `XMS_KEY_PASSWORD` | 密钥密码 |
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("keystore\xmediasaver.jks"))
+```
+
+下次发布：提高 `versionCode` 和 `versionName` 后推送到 `main`。若第一次运行因尚未
+配置密钥而失败，补上密钥后在 Actions 页重跑该工作流即可。
+
 ## 安装到手机
 
 ```bash
