@@ -24,7 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -185,12 +187,28 @@ private fun HomeScreen(
     fun openEntry(entry: HistoryStore.Entry) {
         val uri = entry.uris.firstOrNull() ?: return
         runCatching {
+            val parsed = android.net.Uri.parse(uri)
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = android.net.Uri.parse(uri)
-                entry.mime?.let { setDataAndType(android.net.Uri.parse(uri), it) }
+                data = parsed
+                entry.mime?.let { type = it }
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(Intent.createChooser(intent, "打开文件"))
+        }
+    }
+
+    fun shareEntry(entry: HistoryStore.Entry) {
+        val uri = entry.uris.firstOrNull() ?: return
+        runCatching {
+            val parsed = android.net.Uri.parse(uri)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = entry.mime ?: "*/*"
+                putExtra(Intent.EXTRA_STREAM, parsed)
+                putExtra(Intent.EXTRA_TEXT, entry.text.ifBlank { "分享文件" })
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = android.content.ClipData.newRawUri("file", parsed)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "分享文件"))
         }
     }
 
@@ -250,32 +268,54 @@ private fun HomeScreen(
                     Card(
                         colors = CardDefaults.cardColors(containerColor = CardColor),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.clickable(
-                            enabled = entry.uris.isNotEmpty(),
-                        ) { openEntry(entry) },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "@${entry.authorHandle}",
-                                    fontSize = 14.sp, color = AccentColor, fontWeight = FontWeight.SemiBold,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-                                        .format(Date(entry.timeMs)),
-                                    fontSize = 12.sp, color = SubTextColor,
-                                )
-                                Spacer(Modifier.weight(1f))
-                                Text("${entry.fileCount} 个文件", fontSize = 12.sp, color = SubTextColor)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "@${entry.authorHandle}",
+                                        fontSize = 14.sp, color = AccentColor, fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                                            .format(Date(entry.timeMs)),
+                                        fontSize = 12.sp, color = SubTextColor,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("${entry.fileCount} 个文件", fontSize = 12.sp, color = SubTextColor)
+                                }
+                                if (entry.text.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        entry.text,
+                                        fontSize = 13.sp, color = BodyTextColor,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
-                            if (entry.text.isNotBlank()) {
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    entry.text,
-                                    fontSize = 13.sp, color = BodyTextColor,
-                                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                IconButton(
+                                    onClick = { openEntry(entry) },
+                                    enabled = entry.uris.isNotEmpty(),
+                                ) {
+                                    Icon(Icons.Filled.OpenInNew, contentDescription = "打开文件", tint = AccentColor)
+                                }
+                                IconButton(
+                                    onClick = { shareEntry(entry) },
+                                    enabled = entry.uris.isNotEmpty(),
+                                ) {
+                                    Icon(Icons.Filled.Share, contentDescription = "分享文件", tint = AccentColor)
+                                }
                             }
                         }
                     }
